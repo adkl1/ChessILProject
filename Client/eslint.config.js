@@ -26,10 +26,4 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
-  {
-    files: ['src/test/websocket.test.ts'],
-    rules: {
-      '@typescript-eslint/no-this-alias': 'off',
-    },
-  },
 ])
