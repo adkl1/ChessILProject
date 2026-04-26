@@ -32,9 +32,6 @@ export default function MenuPage() {
                     <Button colorScheme="teal" size="lg" onClick={() => navigate('/leaderboard')}>
                         Leaderboard
                     </Button>
-                    <Button colorScheme="purple" size="lg" onClick={() => navigate('/friends')}>
-                        Friends
-                    </Button>
                     <Button colorScheme="gray" size="lg" onClick={() => navigate('/profile')}>
                         Profile
                     </Button>

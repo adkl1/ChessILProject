@@ -10,6 +10,8 @@ import com.example.chessil.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import com.example.chessil.dto.LeaderboardResponse;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -36,5 +38,11 @@ public class UserController {
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .build();
+    }
+    @GetMapping("/leaderboard")
+    public List<LeaderboardResponse> getLeaderboard(
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return roomService.getLeaderboard(limit);
     }
 }

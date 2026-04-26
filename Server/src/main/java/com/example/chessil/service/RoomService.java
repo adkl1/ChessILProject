@@ -28,7 +28,10 @@ import com.example.chessil.dto.GameHistoryResponse;
 import com.example.chessil.entity.Stats;
 import com.example.chessil.repository.StatsRepository;
 import com.example.chessil.dto.StatsResponse;
-
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import com.example.chessil.dto.LeaderboardResponse;
+import java.util.List;
 
 
 @Service
@@ -517,6 +520,27 @@ public class RoomService {
                 .losses(stats.getLosses())
                 .draws(stats.getDraws())
                 .elo(stats.getElo())
+                .build();
+    }
+
+    public List<LeaderboardResponse> getLeaderboard(int limit) {
+
+        return statsRepository
+                .findAllByOrderByEloDesc(PageRequest.of(0, limit))
+                .stream()
+                .map(this::mapToLeaderboardResponse)
+                .toList();
+    }
+
+    private LeaderboardResponse mapToLeaderboardResponse(Stats stats) {
+        return LeaderboardResponse.builder()
+                .playerId(stats.getPlayerId())
+                .username(stats.getPlayer().getUsername())
+                .elo(stats.getElo())
+                .gamesPlayed(stats.getGamesPlayed())
+                .wins(stats.getWins())
+                .losses(stats.getLosses())
+                .draws(stats.getDraws())
                 .build();
     }
 }

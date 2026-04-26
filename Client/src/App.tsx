@@ -6,7 +6,6 @@ import RoomPage from './pages/RoomPage';
 import GamePage from './pages/GamePage';
 import ProfilePage from './pages/ProfilePage';
 import LeaderboardPage from './pages/LeaderboardPage';
-import FriendsPage from './pages/FriendsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -24,7 +23,6 @@ function App() {
                 <Route path="/game/:id" element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                 <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
-                <Route path="/friends" element={<ProtectedRoute><FriendsPage /></ProtectedRoute>} />
             </Routes>
         </Router>
     );
