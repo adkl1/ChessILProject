@@ -1,32 +1,23 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Button, Input, Flex, Text } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error
-import countryList from 'react-select-country-list';
-
 export default function RegisterForm() {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [country, setCountry] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
     const navigate = useNavigate();
     const { login, fetchMe } = useAuth();
 
-    const options = useMemo(() => countryList().getData(), []);
-
     const handleRegister = async () => {
         setError('');
         setLoading(true);
         try {
-            // NOTE: 'country' is stored locally but not sent to the server
-            // until Adiel adds the field to RegisterRequest DTO.
             const response = await api.post('/auth/register', {
                 username,
                 email,
@@ -74,25 +65,6 @@ export default function RegisterForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
             />
-
-            <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                style={{
-                    padding: '8px',
-                    borderRadius: '6px',
-                    border: '1px solid #E2E8F0',
-                    backgroundColor: 'white',
-                    fontSize: '16px',
-                }}
-            >
-                <option value="" disabled>Select Country (optional)</option>
-                {options.map((opt: { value: string; label: string }) => (
-                    <option key={opt.value} value={opt.label}>
-                        {opt.label}
-                    </option>
-                ))}
-            </select>
 
             {error && (
                 <Text color="red.500" fontSize="sm">

@@ -12,8 +12,15 @@ api.interceptors.request.use(
     (config) => {
         // JWT is being saved in localStorage
         const token = localStorage.getItem('jwt_token');
+        const requestUrl = config.url ?? '';
+        const isAuthRequest =
+            requestUrl === '/auth/login' ||
+            requestUrl === '/auth/register' ||
+            requestUrl.endsWith('/auth/login') ||
+            requestUrl.endsWith('/auth/register');
+
         // If the token exists, we add it to the request's header
-        if (token && config.headers) {
+        if (token && config.headers && !isAuthRequest) {
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;

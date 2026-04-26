@@ -3,7 +3,7 @@
  *
  * Tests the registration form:
  *  - renders all fields
- *  - sends username/email/password (NOT country) to server
+ *  - sends username/email/password to server
  *  - saves JWT and navigates to /lobby on success
  *  - shows server error messages (e.g. "Username already taken")
  */
@@ -62,7 +62,7 @@ describe('RegisterForm', () => {
         expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument();
     });
 
-    it('sends only username, email, password to the server (no country)', async () => {
+    it('sends username, email, and password to the server', async () => {
         const token = makeJwt('newuser@example.com');
         mock.onPost('/auth/register').reply(200, {
             token,
@@ -86,8 +86,6 @@ describe('RegisterForm', () => {
         expect(body.username).toBe('newuser');
         expect(body.email).toBe('newuser@example.com');
         expect(body.password).toBe('secure123');
-        // Country must NOT be sent (server DTO doesn't have it yet)
-        expect(body.country).toBeUndefined();
     });
 
     it('saves JWT and user info to localStorage on success', async () => {

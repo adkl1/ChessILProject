@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-    Box, Button, Flex, Text, HStack, Badge, VStack,
+    Box, Button, Flex, Text, Badge, VStack,
     DialogRoot, DialogContent, DialogHeader, DialogBody,
     DialogFooter, DialogTitle, DialogBackdrop,
 } from '@chakra-ui/react';
@@ -215,19 +215,6 @@ export default function GamePage() {
         }
     }
 
-    // ── Resign / Leave ────────────────────────────────────────────────────────
-    const handleLeaveRoom = async () => {
-        if (!window.confirm('Are you sure you want to resign and leave?')) return;
-        if (gameId) {
-            try {
-                await api.post(`/games/${gameId}/resign`);
-            } catch {
-                // Best-effort — navigate away regardless
-            }
-        }
-        navigate('/lobby');
-    };
-
     const handleGameOverClose = () => {
         navigate('/lobby');
     };
@@ -280,19 +267,14 @@ export default function GamePage() {
                         <Text fontSize="xs" color="gray.400">{myColorLabel}</Text>
                     </VStack>
 
-                    <HStack gap={4}>
-                        <Badge
-                            colorScheme={isMyTurn ? 'blue' : 'gray'}
-                            variant={isMyTurn ? 'solid' : 'outline'}
-                            p={2}
-                            borderRadius="md"
-                        >
-                            {isMyTurn ? `Your Turn (${myColorLabel})` : 'Opponent Thinking…'}
-                        </Badge>
-                        <Button colorScheme="red" variant="ghost" size="sm" onClick={handleLeaveRoom}>
-                            Resign
-                        </Button>
-                    </HStack>
+                    <Badge
+                        colorScheme={isMyTurn ? 'blue' : 'gray'}
+                        variant={isMyTurn ? 'solid' : 'outline'}
+                        p={2}
+                        borderRadius="md"
+                    >
+                        {isMyTurn ? `Your Turn (${myColorLabel})` : 'Opponent Thinking…'}
+                    </Badge>
                 </Flex>
             </Box>
 

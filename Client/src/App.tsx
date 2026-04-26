@@ -22,6 +22,7 @@ function App() {
                 <Route path="/room/:id" element={<ProtectedRoute><RoomPage /></ProtectedRoute>} />
                 <Route path="/game/:id" element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                <Route path="/profile/:userId" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                 <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
             </Routes>
         </Router>
