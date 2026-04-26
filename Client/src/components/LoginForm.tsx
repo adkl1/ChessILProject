@@ -19,11 +19,7 @@ export default function LoginForm() {
         try {
             const response = await api.post('/auth/login', { email, password });
             const { token } = response.data;
-
-            // Save the token first so subsequent requests are authenticated
             login(token);
-
-            // Fetch the real user profile from the backend
             const user = await fetchMe();
             if (!user) {
                 setError('Logged in but could not load user profile.');

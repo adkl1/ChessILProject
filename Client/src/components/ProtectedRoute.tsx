@@ -6,10 +6,6 @@ interface Props {
     children: ReactNode;
 }
 
-/**
- * Wraps any route that requires authentication.
- * Redirects to /login if there is no valid JWT in context.
- */
 export default function ProtectedRoute({ children }: Props) {
     const { isAuthenticated } = useAuth();
 

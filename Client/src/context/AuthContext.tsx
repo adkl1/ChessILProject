@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import api from '../services/api';
 
-// Shape of the logged-in user (matches GET /api/users/me response)
 export interface User {
     id: number;
     username: string;
@@ -20,7 +19,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    // Rehydrate from localStorage on first render so a page refresh keeps you logged in
     const [token, setToken] = useState<string | null>(() => localStorage.getItem('jwt_token'));
     const [user, setUser] = useState<User | null>(() => {
         const stored = localStorage.getItem('chess_user');
@@ -43,10 +41,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    /**
-     * Calls GET /users/me to get the full user profile from the backend.
-     * Should be called after login/register to hydrate user data.
-     */
     const fetchMe = useCallback(async (): Promise<User | null> => {
         try {
             const { data } = await api.get<User>('/users/me');
@@ -59,14 +53,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    // On mount: if we have a token but no user data, fetch profile from server
     useEffect(() => {
-        if (token && !user) {
-            fetchMe();
-        }
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        let stopd = false;
 
-    // 401 response interceptor — auto-logout on expired/invalid token
+        const loadMe = async () => {
+            const usr = await fetchMe();
+            if (stopd || !usr) return;
+        };
+
+        if (token && !user) {
+            void loadMe();
+        }
+
+        return () => {
+            stopd = true;
+        };
+    }, [fetchMe, token, user]);
+
     useEffect(() => {
         const interceptorId = api.interceptors.response.use(
             (response) => response,
@@ -89,7 +92,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 }
 
-// Convenience hook — throws if used outside <AuthProvider>
 export function useAuth(): AuthContextType {
     const ctx = useContext(AuthContext);
     if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');

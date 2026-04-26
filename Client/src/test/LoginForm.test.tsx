@@ -1,13 +1,3 @@
-/**
- * LoginForm.test.tsx
- *
- * Tests the login form component:
- *  - renders email/password inputs and button
- *  - calls POST /api/auth/login with correct payload
- *  - saves JWT, decodes email-prefix as display name, navigates to /lobby
- *  - shows an error message on failed login
- *  - submits on Enter key
- */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -19,15 +9,12 @@ import LoginForm from '../components/LoginForm';
 import { AuthProvider } from '../context/AuthContext';
 import api from '../services/api';
 
-// ── Mocks ──────────────────────────────────────────────────────────────────
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
     const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
     return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// Build a fake but valid JWT structure: header.payload.signature
-// payload = { sub: "rotem@example.com", exp: far-future }
 const makeJwt = (email: string) => {
     const payload = btoa(JSON.stringify({ sub: email, exp: 9999999999 }));
     return `fakeheader.${payload}.fakesig`;
@@ -45,7 +32,6 @@ afterEach(() => {
     mock.restore();
 });
 
-// ── Helper wrapper ─────────────────────────────────────────────────────────
 function renderForm() {
     return render(
         <ChakraProvider value={defaultSystem}>
@@ -58,7 +44,6 @@ function renderForm() {
     );
 }
 
-// ── Tests ──────────────────────────────────────────────────────────────────
 describe('LoginForm', () => {
     it('renders email input, password input and login button', () => {
         renderForm();
@@ -67,9 +52,10 @@ describe('LoginForm', () => {
         expect(screen.getByRole('button', { name: /login/i })).toBeInTheDocument();
     });
 
-    it('sends correct payload to POST /auth/login and navigates to /lobby', async () => {
+    it('sends correct payload to POST /auth/login and navigates to /menu', async () => {
         const token = makeJwt('rotem@example.com');
         mock.onPost('/auth/login').reply(200, { token, message: 'Login successful' });
+        mock.onGet('/users/me').reply(200, { id: 1, username: 'rotem', email: 'rotem@example.com' });
 
         renderForm();
         const user = userEvent.setup();
@@ -79,20 +65,18 @@ describe('LoginForm', () => {
         await user.click(screen.getByRole('button', { name: /login/i }));
 
         await waitFor(() => {
-            // Navigated to lobby
-            expect(mockNavigate).toHaveBeenCalledWith('/lobby');
-            // JWT saved to localStorage
+            expect(mockNavigate).toHaveBeenCalledWith('/menu');
             expect(localStorage.getItem('jwt_token')).toBe(token);
         });
 
-        // Verify the request body sent to the server
         const requestBody = JSON.parse(mock.history.post[0].data);
         expect(requestBody).toEqual({ email: 'rotem@example.com', password: 'mypassword' });
     });
 
-    it('extracts display name from email prefix (not the full email)', async () => {
+    it('stores the backend profile after login', async () => {
         const token = makeJwt('rotem@example.com');
         mock.onPost('/auth/login').reply(200, { token, message: 'Login successful' });
+        mock.onGet('/users/me').reply(200, { id: 1, username: 'rotem', email: 'rotem@example.com' });
 
         renderForm();
         const user = userEvent.setup();
@@ -103,7 +87,7 @@ describe('LoginForm', () => {
 
         await waitFor(() => {
             const storedUser = JSON.parse(localStorage.getItem('chess_user') ?? '{}');
-            // Should be "rotem", NOT "rotem@example.com"
+            expect(storedUser.id).toBe(1);
             expect(storedUser.username).toBe('rotem');
             expect(storedUser.email).toBe('rotem@example.com');
         });
@@ -123,7 +107,6 @@ describe('LoginForm', () => {
             expect(screen.getByText('Invalid email or password')).toBeInTheDocument();
         });
 
-        // Should NOT navigate away
         expect(mockNavigate).not.toHaveBeenCalled();
     });
 
@@ -145,6 +128,7 @@ describe('LoginForm', () => {
     it('submits the form when Enter is pressed in the password field', async () => {
         const token = makeJwt('rotem@example.com');
         mock.onPost('/auth/login').reply(200, { token, message: 'Login successful' });
+        mock.onGet('/users/me').reply(200, { id: 1, username: 'rotem', email: 'rotem@example.com' });
 
         renderForm();
         const user = userEvent.setup();
@@ -153,7 +137,7 @@ describe('LoginForm', () => {
         await user.type(screen.getByPlaceholderText('Password'), 'mypassword{Enter}');
 
         await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/lobby');
+            expect(mockNavigate).toHaveBeenCalledWith('/menu');
         });
     });
 });

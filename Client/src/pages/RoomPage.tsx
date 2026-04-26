@@ -11,15 +11,18 @@ interface RoomResponse {
     hostUsername: string;
     guestId: number | null;
     guestUsername: string | null;
-    status: string;
-    gameId?: number; // The backend may include gameId when the game starts
+    status: 'WAITING' | 'FULL' | 'IN_GAME' | 'CLOSED';
+    gameId?: number;
 }
 
 interface GameStartResponse {
-    id: number;       // gameId
-    roomId: number;
+    id: number;
     whitePlayerId: number;
+    whitePlayerUsername: string;
     blackPlayerId: number;
+    blackPlayerUsername: string;
+    currentTurn: string;
+    fen?: string;
     status: string;
 }
 
@@ -41,7 +44,6 @@ export default function RoomPage() {
     
     const myColor = location.state?.myColor ?? 'w';
 
-    // ── Initial room data fetch ──────────────────────────────────────────────
     useEffect(() => {
         const fetchRooms = async () => {
             try {
@@ -60,7 +62,6 @@ export default function RoomPage() {
         fetchRooms();
     }, [id]);
 
-    // ── WebSocket subscription for real-time room updates ────────────────────
     useEffect(() => {
         if (!id) return;
 
@@ -68,7 +69,6 @@ export default function RoomPage() {
         wsService.subscribeToRoom(id, (payload) => {
             const update = (payload as SocketEvent<RoomResponse>).payload;
             if (!update) return;
-            console.log('[WS] Room update:', update);
             setRoom(update);
         });
 
@@ -77,7 +77,6 @@ export default function RoomPage() {
         };
     }, [id]);
 
-    // ── Auto-navigate when the game starts (for the guest) ───────────────────
     useEffect(() => {
         if (room?.status === 'IN_GAME' && room?.gameId) {
             navigate(`/game/${room.gameId}`, {
@@ -89,22 +88,21 @@ export default function RoomPage() {
     const isHost = user?.id === room?.hostId;
     const isFull = !!room?.guestUsername;
 
-    // ── Leave / Delete room ──────────────────────────────────────────────────
     const handleLeave = async () => {
         try {
             await api.delete(`/rooms/${id}`);
-        } catch {}
+        } catch (err) {
+            console.error(err);
+        }
         navigate('/lobby');
     };
 
-    // ── Start game (host only) ───────────────────────────────────────────────
     const handleStartGame = async () => {
         if (!isHost || !isFull) return;
         setStartingGame(true);
         setError('');
         try {
             const { data } = await api.post<GameStartResponse>(`/games/rooms/${id}/start`);
-            // Navigate to the game page using the gameId returned by the backend
             navigate(`/game/${data.id}`, {
                 state: { room, myColor, gameId: data.id },
             });

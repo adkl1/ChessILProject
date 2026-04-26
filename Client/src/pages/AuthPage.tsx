@@ -4,7 +4,6 @@ import LoginForm from '../components/LoginForm';
 import RegisterForm from '../components/RegisterForm';
 
 export default function AuthPage() {
-    // Toggle between the login and register views
     const [view, setView] = useState<'login' | 'register'>('login');
 
     return (
@@ -14,10 +13,7 @@ export default function AuthPage() {
                     Welcome to ChessIL
                 </Text>
 
-                {/* Show the appropriate form based on the current state */}
                 {view === 'login' ? <LoginForm /> : <RegisterForm />}
-
-                {/* Switch between the forms */}
                 <Flex justifyContent="center" mt={4}>
                     <Button variant="ghost" onClick={() => setView(view === 'login' ? 'register' : 'login')}>
                         {view === 'login' ? 'Need an account? Register' : 'Already have an account? Login'}

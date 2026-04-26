@@ -12,11 +12,8 @@ function App() {
     return (
         <Router>
             <Routes>
-                {/* Public */}
                 <Route path="/" element={<Navigate to="/login" />} />
                 <Route path="/login" element={<AuthPage />} />
-
-                {/* Protected — requires a valid JWT */}
                 <Route path="/menu" element={<ProtectedRoute><MenuPage /></ProtectedRoute>} />
                 <Route path="/lobby" element={<ProtectedRoute><LobbyPage /></ProtectedRoute>} />
                 <Route path="/room/:id" element={<ProtectedRoute><RoomPage /></ProtectedRoute>} />

@@ -64,7 +64,7 @@ export default function GamePage() {
 
     const [game, setGame] = useState(new Chess());
     const [gameData, setGameData] = useState<GameResponse | null>(null);
-    const [gameOver, setGameOver] = useState<string | null>(null); // null = ongoing
+    const [gameOver, setGameOver] = useState<string | null>(null);
 
     const myColor: 'w' | 'b' =
         gameData && user
@@ -117,28 +117,29 @@ export default function GamePage() {
         }
     }, [gameId, applyGameResponse]);
 
-    // ── Fetch game state from backend on mount ──────────────────────────────
     useEffect(() => {
-        void syncGame();
-    }, [syncGame]);
+        let stopd = false;
 
-    // ── Game-over detection — runs after every game state update ─────────────
-    const checkGameOver = useCallback((g: Chess) => {
-        if (g.isCheckmate()) {
-            const winner = g.turn() === 'w' ? 'Black' : 'White';
-            setGameOver(`Checkmate! ${winner} wins.`);
-        } else if (g.isStalemate()) {
-            setGameOver('Stalemate!');
-        } else if (g.isDraw()) {
-            setGameOver("It's a draw!");
-        }
-    }, []);
+        const loadGame = async () => {
+            if (!gameId) return;
 
-    useEffect(() => {
-        checkGameOver(game);
-    }, [game, checkGameOver]);
+            try {
+                const { data } = await api.get<GameResponse>(`/games/${gameId}`);
+                if (!stopd) {
+                    applyGameResponse(data);
+                }
+            } catch (err) {
+                console.error('Failed to fetch game state:', err);
+            }
+        };
 
-    // ── WebSocket connection — subscribe to game updates ─────────────────────
+        void loadGame();
+
+        return () => {
+            stopd = true;
+        };
+    }, [applyGameResponse, gameId]);
+
     useEffect(() => {
         if (!gameId) return;
 
@@ -154,8 +155,6 @@ export default function GamePage() {
         };
     }, [gameId, applyGameResponse]);
 
-    // Poll the authoritative server state while a live game is active so a
-    // missed terminal event does not leave one client stuck until refresh.
     useEffect(() => {
         if (!gameId || gameData?.status === 'WHITE_WIN' || gameData?.status === 'BLACK_WIN' || gameData?.status === 'DRAW') {
             return;
@@ -170,7 +169,6 @@ export default function GamePage() {
         };
     }, [gameId, gameData?.status, syncGame]);
 
-    // ── Piece drop handler ────────────────────────────────────────────────────
     function onDrop({ sourceSquare, targetSquare }: PieceDropArgs): boolean {
         if (!targetSquare || gameOver || game.turn() !== myColor) return false;
 
@@ -187,12 +185,19 @@ export default function GamePage() {
                 ...(isPromotionMove ? { promotion: 'q' } : {}),
             };
 
-            // Clone the board first — never mutate React state objects directly
             const gameCopy = new Chess(game.fen());
             const move = gameCopy.move(moveData);
             if (move === null) return false;
 
             setGame(gameCopy);
+            if (gameCopy.isCheckmate()) {
+                const winner = gameCopy.turn() === 'w' ? 'Black' : 'White';
+                setGameOver(`Checkmate! ${winner} wins.`);
+            } else if (gameCopy.isStalemate()) {
+                setGameOver('Stalemate!');
+            } else if (gameCopy.isDraw()) {
+                setGameOver("It's a draw!");
+            }
             if (!gameId) return false;
 
             void api.post<GameResponse>(`/games/${gameId}/move`, moveData)
@@ -226,8 +231,6 @@ export default function GamePage() {
     return (
         <Flex height="100vh" alignItems="center" justifyContent="center" bg="gray.900" p={4}>
             <Box p={6} maxWidth="600px" width="100%" bg="white" borderRadius="2xl" boxShadow="dark-lg">
-
-                {/* Opponent info */}
                 <Flex justifyContent="space-between" mb={4} alignItems="center">
                     <VStack align="start" gap={0}>
                         <Text fontSize="sm" color="gray.500">Game #{gameId}</Text>
@@ -244,8 +247,6 @@ export default function GamePage() {
                         {!isMyTurn ? `${opponentColorLabel}'s Turn` : 'Waiting…'}
                     </Badge>
                 </Flex>
-
-                {/* Chessboard */}
                 <Box mb={4} borderRadius="lg" overflow="hidden" boxShadow="inner" bg="gray.100" p={2}>
                     <Chessboard
                         options={{
@@ -258,8 +259,6 @@ export default function GamePage() {
                         }}
                     />
                 </Box>
-
-                {/* My info */}
                 <Flex justifyContent="space-between" alignItems="center">
                     <VStack align="start" gap={0}>
                         <Text fontSize="sm" color="gray.500">You</Text>
@@ -277,8 +276,6 @@ export default function GamePage() {
                     </Badge>
                 </Flex>
             </Box>
-
-            {/* Game-over dialog */}
             <DialogRoot open={!!gameOver} onOpenChange={handleGameOverClose}>
                 <DialogBackdrop />
                 <DialogContent>

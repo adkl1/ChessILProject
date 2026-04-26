@@ -1,10 +1,3 @@
-/**
- * ProtectedRoute.test.tsx
- *
- * Tests that:
- *  - an unauthenticated user is redirected to /login
- *  - an authenticated user sees the protected content
- */
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '../context/AuthContext';
@@ -15,7 +8,7 @@ function setup(initialPath: string, authenticated: boolean) {
         localStorage.setItem('jwt_token', 'some.valid.token');
         localStorage.setItem(
             'chess_user',
-            JSON.stringify({ username: 'rotem', email: 'rotem@test.com' }),
+            JSON.stringify({ id: 1, username: 'rotem', email: 'rotem@test.com' }),
         );
     } else {
         localStorage.clear();

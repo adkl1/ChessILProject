@@ -20,4 +20,16 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/context/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    files: ['src/test/websocket.test.ts'],
+    rules: {
+      '@typescript-eslint/no-this-alias': 'off',
+    },
+  },
 ])

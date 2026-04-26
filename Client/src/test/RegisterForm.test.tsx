@@ -1,12 +1,3 @@
-/**
- * RegisterForm.test.tsx
- *
- * Tests the registration form:
- *  - renders all fields
- *  - sends username/email/password to server
- *  - saves JWT and navigates to /lobby on success
- *  - shows server error messages (e.g. "Username already taken")
- */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -68,6 +59,7 @@ describe('RegisterForm', () => {
             token,
             message: 'User registered successfully',
         });
+        mock.onGet('/users/me').reply(200, { id: 2, username: 'newuser', email: 'newuser@example.com' });
 
         renderForm();
         const user = userEvent.setup();
@@ -78,11 +70,10 @@ describe('RegisterForm', () => {
         await user.click(screen.getByRole('button', { name: /create account/i }));
 
         await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/lobby');
+            expect(mockNavigate).toHaveBeenCalledWith('/menu');
         });
 
         const body = JSON.parse(mock.history.post[0].data);
-        // These three fields MUST be present
         expect(body.username).toBe('newuser');
         expect(body.email).toBe('newuser@example.com');
         expect(body.password).toBe('secure123');
@@ -94,6 +85,7 @@ describe('RegisterForm', () => {
             token,
             message: 'User registered successfully',
         });
+        mock.onGet('/users/me').reply(200, { id: 2, username: 'newuser', email: 'newuser@example.com' });
 
         renderForm();
         const user = userEvent.setup();
@@ -106,7 +98,7 @@ describe('RegisterForm', () => {
         await waitFor(() => {
             expect(localStorage.getItem('jwt_token')).toBe(token);
             const stored = JSON.parse(localStorage.getItem('chess_user') ?? '{}');
-            // Username should be the one the user typed (not email-prefix)
+            expect(stored.id).toBe(2);
             expect(stored.username).toBe('newuser');
         });
     });

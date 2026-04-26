@@ -1,16 +1,6 @@
-/**
- * AuthContext.test.tsx
- *
- * Tests that the auth context correctly:
- *  - starts unauthenticated when localStorage is empty
- *  - becomes authenticated after login()
- *  - persists the token across re-renders (localStorage rehydration)
- *  - clears state after logout()
- */
 import { render, screen, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 
-// ── Helper: a simple consumer that renders auth state ──────────────────────
 function AuthDisplay() {
     const { isAuthenticated, user, token } = useAuth();
     return (
@@ -27,7 +17,7 @@ function LoginButton() {
     const { login } = useAuth();
     return (
         <button
-            onClick={() => login('test.jwt.token', { username: 'rotem', email: 'rotem@test.com' })}
+            onClick={() => login('test.jwt.token', { id: 1, username: 'rotem', email: 'rotem@test.com' })}
         >
             Login
         </button>
@@ -39,7 +29,6 @@ function LogoutButton() {
     return <button onClick={logout}>Logout</button>;
 }
 
-// ── Tests ──────────────────────────────────────────────────────────────────
 beforeEach(() => {
     localStorage.clear();
 });
@@ -91,17 +80,17 @@ describe('AuthContext', () => {
 
         expect(localStorage.getItem('jwt_token')).toBe('test.jwt.token');
         expect(JSON.parse(localStorage.getItem('chess_user') ?? '{}')).toEqual({
+            id: 1,
             username: 'rotem',
             email: 'rotem@test.com',
         });
     });
 
     it('rehydrates from localStorage on mount', () => {
-        // Simulate a previous session
         localStorage.setItem('jwt_token', 'existing.token');
         localStorage.setItem(
             'chess_user',
-            JSON.stringify({ username: 'adiel', email: 'adiel@test.com' }),
+            JSON.stringify({ id: 2, username: 'adiel', email: 'adiel@test.com' }),
         );
 
         render(
@@ -119,7 +108,7 @@ describe('AuthContext', () => {
         localStorage.setItem('jwt_token', 'existing.token');
         localStorage.setItem(
             'chess_user',
-            JSON.stringify({ username: 'rotem', email: 'rotem@test.com' }),
+            JSON.stringify({ id: 1, username: 'rotem', email: 'rotem@test.com' }),
         );
 
         render(

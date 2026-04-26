@@ -26,11 +26,9 @@ export default function LobbyPage() {
     const [actionLoading, setActionLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // ── Fetch rooms from REST endpoint ───────────────────────────────────────
     const fetchRooms = useCallback(async () => {
         try {
             const { data } = await api.get<RoomResponse[]>('/rooms');
-            // Show active rooms (WAITING and FULL)
             setRooms(data.filter((r) => r.status === 'WAITING' || r.status === 'FULL'));
         } catch {
             setError('Could not load rooms. Is the server running?');
@@ -39,31 +37,43 @@ export default function LobbyPage() {
         }
     }, []);
 
-    // ── Initial load + WebSocket subscription for live updates ───────────────
     useEffect(() => {
-        fetchRooms();
+        let stopd = false;
 
-        // Connect to WebSocket and subscribe to global room updates
+        const loadAtStart = async () => {
+            try {
+                const { data } = await api.get<RoomResponse[]>('/rooms');
+                if (!stopd) {
+                    setRooms(data.filter((r) => r.status === 'WAITING' || r.status === 'FULL'));
+                }
+            } catch {
+                if (!stopd) {
+                    setError('Could not load rooms. Is the server running?');
+                }
+            } finally {
+                if (!stopd) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        void loadAtStart();
         wsService.connect();
-        wsService.subscribeToRooms((payload) => {
-            // The server broadcasts room updates — refresh the list
-            // Payload could be a single room update or a signal to refetch
-            console.log('[WS] Room update received:', payload);
+        wsService.subscribeToRooms(() => {
             fetchRooms();
         });
 
         return () => {
+            stopd = true;
             wsService.unsubscribe('rooms');
         };
     }, [fetchRooms]);
 
-    // ── Create a new room ────────────────────────────────────────────────────
     const handleCreateRoom = async () => {
         setActionLoading(true);
         setError('');
         try {
             const { data } = await api.post<RoomResponse>('/rooms');
-            // Host is White — navigate to the waiting room
             navigate(`/room/${data.id}`, {
                 state: { room: data, myColor: 'w' },
             });
@@ -77,14 +87,12 @@ export default function LobbyPage() {
         }
     };
 
-    // ── Join a selected room ─────────────────────────────────────────────────
     const handleJoinRoom = async () => {
         if (!selectedRoomId) return;
         setActionLoading(true);
         setError('');
         try {
             const { data } = await api.post<RoomResponse>(`/rooms/${selectedRoomId}/join`);
-            // Guest is Black
             navigate(`/room/${data.id}`, {
                 state: { room: data, myColor: 'b' },
             });
@@ -93,7 +101,7 @@ export default function LobbyPage() {
                 (err as { response?: { data?: { message?: string } } })
                     ?.response?.data?.message ?? 'Could not join room.';
             setError(msg);
-            fetchRooms(); // Refresh — room may now be full
+            fetchRooms();
         } finally {
             setActionLoading(false);
         }
@@ -104,17 +112,12 @@ export default function LobbyPage() {
         navigate('/login');
     };
 
-    // Check if a room can be joined (only WAITING rooms)
     const canJoinRoom = (room: RoomResponse) => room.status === 'WAITING';
-
-    // Don't allow joining your own room
     const isOwnRoom = (room: RoomResponse) => user?.id === room.hostId;
 
     return (
         <Flex height="100vh" alignItems="center" justifyContent="center" bg="gray.50">
             <Box p={8} maxWidth="500px" width="100%" bg="white" borderWidth={1} borderRadius={8} boxShadow="lg">
-
-                {/* Header */}
                 <Flex justifyContent="space-between" alignItems="center" mb={6}>
                     <Text fontSize="3xl" fontWeight="bold">Rooms</Text>
                     <Flex gap={2}>
@@ -126,15 +129,11 @@ export default function LobbyPage() {
                         </Button>
                     </Flex>
                 </Flex>
-
-                {/* Error banner */}
                 {error && (
                     <Text color="red.500" fontSize="sm" mb={4} textAlign="center">
                         {error}
                     </Text>
                 )}
-
-                {/* Room list */}
                 {loading ? (
                     <Center py={8}><Spinner /></Center>
                 ) : rooms.length === 0 ? (
@@ -182,8 +181,6 @@ export default function LobbyPage() {
                         ))}
                     </VStack>
                 )}
-
-                {/* Actions */}
                 <Flex justifyContent="space-between" gap={4} mt={rooms.length === 0 ? 0 : undefined}>
                     <Button
                         bg="blue.500"
