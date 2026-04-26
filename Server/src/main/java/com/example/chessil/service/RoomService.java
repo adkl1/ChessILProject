@@ -257,7 +257,7 @@ public class RoomService {
         messagingTemplate.convertAndSend(
                 "/topic/rooms",
                 SocketEvent.builder()
-                        .type("ROOM_UPDATED")
+                        .type("ROOM_DELETED")
                         .payload(roomResponse)
                         .build()
         );
@@ -277,6 +277,8 @@ public class RoomService {
                         .payload(gameResponse)
                         .build()
         );
+
+        rooms.remove(roomId);
 
         return gameResponse;
     }

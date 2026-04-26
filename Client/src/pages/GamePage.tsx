@@ -5,7 +5,7 @@ import {
     DialogFooter, DialogTitle, DialogBackdrop,
 } from '@chakra-ui/react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Chess } from 'chess.js';
+import { Chess, type Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { useAuth } from '../context/AuthContext';
 import { wsService } from '../services/websocket';
@@ -22,9 +22,11 @@ interface RoomResponse {
 
 interface GameResponse {
     id: number;
-    roomId: number;
     whitePlayerId: number;
+    whitePlayerUsername: string;
     blackPlayerId: number;
+    blackPlayerUsername: string;
+    currentTurn: string;
     status: string;
     fen?: string;
 }
@@ -41,6 +43,16 @@ interface MovePayload {
     promotion?: string;
 }
 
+interface PieceDropArgs {
+    sourceSquare: string;
+    targetSquare: string | null;
+}
+
+interface SocketEvent<T> {
+    type: string;
+    payload: T;
+}
+
 export default function GamePage() {
     const { id: gameId } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -50,35 +62,65 @@ export default function GamePage() {
     const locationState = location.state as LocationState | null;
     const room = locationState?.room ?? null;
 
-    // Host = White, Guest = Black. Falls back to state passed from lobby.
-    const myColor: 'w' | 'b' = locationState?.myColor ?? 'w';
+    const [game, setGame] = useState(new Chess());
+    const [gameData, setGameData] = useState<GameResponse | null>(null);
+    const [gameOver, setGameOver] = useState<string | null>(null); // null = ongoing
+
+    const myColor: 'w' | 'b' =
+        gameData && user
+            ? user.id === gameData.whitePlayerId
+                ? 'w'
+                : user.id === gameData.blackPlayerId
+                    ? 'b'
+                    : (locationState?.myColor ?? 'w')
+            : (locationState?.myColor ?? 'w');
 
     const opponentName =
-        myColor === 'w'
-            ? (room?.guestUsername ?? 'Opponent')
-            : (room?.hostUsername ?? 'Opponent');
+        gameData && user
+            ? (user.id === gameData.whitePlayerId
+                ? gameData.blackPlayerUsername
+                : gameData.whitePlayerUsername)
+            : myColor === 'w'
+                ? (room?.guestUsername ?? 'Opponent')
+                : (room?.hostUsername ?? 'Opponent');
 
-    const [game, setGame] = useState(new Chess());
-    const [gameOver, setGameOver] = useState<string | null>(null); // null = ongoing
+    const applyGameResponse = useCallback((data: GameResponse) => {
+        setGameData(data);
+
+        if (data.fen) {
+            try {
+                setGame(new Chess(data.fen));
+            } catch {
+                console.error('Failed to parse game FEN:', data.fen);
+            }
+        }
+
+        if (data.status === 'WHITE_WIN') {
+            setGameOver('Game over. White wins.');
+        } else if (data.status === 'BLACK_WIN') {
+            setGameOver('Game over. Black wins.');
+        } else if (data.status === 'DRAW') {
+            setGameOver("It's a draw!");
+        } else {
+            setGameOver(null);
+        }
+    }, []);
+
+    const syncGame = useCallback(async () => {
+        if (!gameId) return;
+
+        try {
+            const { data } = await api.get<GameResponse>(`/games/${gameId}`);
+            applyGameResponse(data);
+        } catch (err) {
+            console.error('Failed to fetch game state:', err);
+        }
+    }, [gameId, applyGameResponse]);
 
     // ── Fetch game state from backend on mount ──────────────────────────────
     useEffect(() => {
-        if (!gameId) return;
-
-        const fetchGame = async () => {
-            try {
-                const { data } = await api.get<GameResponse>(`/games/${gameId}`);
-                // If the server provides a FEN, load it
-                if (data.fen) {
-                    setGame(new Chess(data.fen));
-                }
-            } catch (err) {
-                console.error('Failed to fetch game state:', err);
-            }
-        };
-
-        fetchGame();
-    }, [gameId]);
+        void syncGame();
+    }, [syncGame]);
 
     // ── Game-over detection — runs after every game state update ─────────────
     const checkGameOver = useCallback((g: Chess) => {
@@ -100,38 +142,49 @@ export default function GamePage() {
     useEffect(() => {
         if (!gameId) return;
 
-        wsService.connect(() => {
-            wsService.subscribeToGame(gameId, (incomingPayload) => {
-                const incomingMove = incomingPayload as MovePayload;
-                setGame((currentGame) => {
-                    // Ignore moves if the game is already over
-                    if (currentGame.isGameOver()) return currentGame;
-                    try {
-                        const gameCopy = new Chess(currentGame.fen());
-                        const move = gameCopy.move(incomingMove);
-                        // Return the new state only if the move was legal
-                        return move ? gameCopy : currentGame;
-                    } catch {
-                        return currentGame;
-                    }
-                });
-            });
+        wsService.connect();
+        wsService.subscribeToGame(gameId, (incomingPayload) => {
+            const update = (incomingPayload as SocketEvent<GameResponse>).payload;
+            if (!update) return;
+            applyGameResponse(update);
         });
 
         return () => {
             wsService.unsubscribe(`game-${gameId}`);
         };
-    }, [gameId]);
+    }, [gameId, applyGameResponse]);
+
+    // Poll the authoritative server state while a live game is active so a
+    // missed terminal event does not leave one client stuck until refresh.
+    useEffect(() => {
+        if (!gameId || gameData?.status === 'WHITE_WIN' || gameData?.status === 'BLACK_WIN' || gameData?.status === 'DRAW') {
+            return;
+        }
+
+        const intervalId = window.setInterval(() => {
+            void syncGame();
+        }, 3000);
+
+        return () => {
+            window.clearInterval(intervalId);
+        };
+    }, [gameId, gameData?.status, syncGame]);
 
     // ── Piece drop handler ────────────────────────────────────────────────────
-    function onDrop(sourceSquare: string, targetSquare: string): boolean {
+    function onDrop({ sourceSquare, targetSquare }: PieceDropArgs): boolean {
         if (!targetSquare || gameOver || game.turn() !== myColor) return false;
 
         try {
+            const movingPiece = game.get(sourceSquare as Square);
+            const isPromotionMove =
+                movingPiece?.type === 'p' &&
+                ((movingPiece.color === 'w' && targetSquare.endsWith('8')) ||
+                    (movingPiece.color === 'b' && targetSquare.endsWith('1')));
+
             const moveData: MovePayload = {
                 from: sourceSquare,
                 to: targetSquare,
-                promotion: 'q', // auto-promote to queen
+                ...(isPromotionMove ? { promotion: 'q' } : {}),
             };
 
             // Clone the board first — never mutate React state objects directly
@@ -140,10 +193,21 @@ export default function GamePage() {
             if (move === null) return false;
 
             setGame(gameCopy);
-            // checkGameOver will run automatically via the useEffect that watches `game`
+            if (!gameId) return false;
 
-            // Send move to server via WebSocket
-            if (gameId) wsService.sendMove(gameId, moveData);
+            void api.post<GameResponse>(`/games/${gameId}/move`, moveData)
+                .then(({ data }) => applyGameResponse(data))
+                .catch(async (err: unknown) => {
+                console.error(
+                    'Move rejected by server:',
+                    (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? err,
+                );
+                try {
+                    await syncGame();
+                } catch (err) {
+                    console.error('Failed to sync move with server:', err);
+                }
+            });
 
             return true;
         } catch {
@@ -154,9 +218,9 @@ export default function GamePage() {
     // ── Resign / Leave ────────────────────────────────────────────────────────
     const handleLeaveRoom = async () => {
         if (!window.confirm('Are you sure you want to resign and leave?')) return;
-        if (room?.id) {
+        if (gameId) {
             try {
-                await api.delete(`/rooms/${room.id}`);
+                await api.post(`/games/${gameId}/resign`);
             } catch {
                 // Best-effort — navigate away regardless
             }
@@ -197,11 +261,13 @@ export default function GamePage() {
                 {/* Chessboard */}
                 <Box mb={4} borderRadius="lg" overflow="hidden" boxShadow="inner" bg="gray.100" p={2}>
                     <Chessboard
-                        position={game.fen()}
-                        onPieceDrop={onDrop}
-                        boardOrientation={myColor === 'b' ? 'black' : 'white'}
-                        customBoardStyle={{
-                            borderRadius: '4px',
+                        options={{
+                            position: game.fen(),
+                            onPieceDrop: onDrop,
+                            boardOrientation: myColor === 'b' ? 'black' : 'white',
+                            boardStyle: {
+                                borderRadius: '4px',
+                            },
                         }}
                     />
                 </Box>

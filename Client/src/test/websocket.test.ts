@@ -1,165 +1,153 @@
-/**
- * websocket.test.ts
- *
- * Tests the WebSocketService:
- *  - reads JWT lazily from localStorage (NOT at import time)
- *  - connect() calls activate() and fires the onConnected callback
- *  - connect() is a no-op + fires callback when already active
- *  - disconnect() calls deactivate() only when active
- *  - subscribeToRoom() subscribes to the correct STOMP topic
- *  - subscribeToRoom() parses JSON and calls the provided callback
- *  - sendMove() publishes to the correct destination when connected
- *  - sendMove() is a no-op when not connected
- */
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-// ── Capture the config the service passes to new Client() ─────────────────
 type MockClientConfig = {
     beforeConnect?: () => void;
+    onConnect?: (frame: unknown) => void;
     connectHeaders?: Record<string, string>;
 };
 
+type MockClientInstance = {
+    connectHeaders?: Record<string, string>;
+    onStompError?: (frame: unknown) => void;
+    onWebSocketClose?: () => void;
+};
+
 let capturedConfig: MockClientConfig | null = null;
-let capturedClient: { connectHeaders?: Record<string, string> } | null = null;
+let capturedClient: MockClientInstance | null = null;
 
 const mockSubscription = { unsubscribe: vi.fn() };
-const mockPublish     = vi.fn();
-const mockSubscribe   = vi.fn(() => mockSubscription);
-const mockActivate    = vi.fn();
-const mockDeactivate  = vi.fn();
+const mockSubscribe = vi.fn(() => mockSubscription);
+const mockActivate = vi.fn();
+const mockDeactivate = vi.fn();
 
-// Mutable state shared by every mockClient instance
-let _active    = false;
+let _active = false;
 let _connected = false;
-let _onConnect: ((f: unknown) => void) | null = null;
 
-// Restore these implementations before each test (vi.clearAllMocks resets them)
 function restoreImpls() {
     mockActivate.mockImplementation(() => {
-        _active    = true;
+        _active = true;
         _connected = true;
-        _onConnect?.({});          // fire immediately so callbacks run synchronously
+        capturedConfig?.onConnect?.({});
     });
+
     mockDeactivate.mockImplementation(() => {
-        _active    = false;
+        _active = false;
         _connected = false;
     });
+
     mockSubscribe.mockReturnValue(mockSubscription);
 }
 
-// ── Mock @stomp/stompjs with a real class so `new Client(config)` works ───
 vi.mock('@stomp/stompjs', () => {
     class Client {
+        connectHeaders?: Record<string, string>;
+        onStompError?: (frame: unknown) => void;
+        onWebSocketClose?: () => void;
+
         constructor(config: MockClientConfig) {
             capturedConfig = config;
             capturedClient = this;
         }
-        get active()    { return _active; }
-        get connected() { return _connected; }
-        set onConnect(fn: ((f: unknown) => void) | null) { _onConnect = fn; }
-        activate    = mockActivate;
-        deactivate  = mockDeactivate;
-        subscribe   = mockSubscribe;
-        publish     = mockPublish;
+
+        get active() {
+            return _active;
+        }
+
+        get connected() {
+            return _connected;
+        }
+
+        activate = mockActivate;
+        deactivate = mockDeactivate;
+        subscribe = mockSubscribe;
     }
+
     return { Client };
 });
 
-// Import AFTER vi.mock() is hoisted
 const { wsService } = await import('../services/websocket');
 
-// ── Reset before each test ────────────────────────────────────────────────
 beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    _active    = false;
+    wsService.disconnect();
+    _active = false;
     _connected = false;
-    _onConnect = null;
     restoreImpls();
+    vi.clearAllMocks();
 });
 
-// ── Tests ─────────────────────────────────────────────────────────────────
 describe('WebSocketService — token handling', () => {
-    it('reads token lazily: token set AFTER import is still picked up', () => {
+    it('reads token lazily from localStorage before connecting', () => {
         localStorage.setItem('jwt_token', 'late-token');
-        capturedConfig!.beforeConnect?.();
-        expect(capturedClient!.connectHeaders?.Authorization).toBe('Bearer late-token');
+        capturedConfig?.beforeConnect?.();
+        expect(capturedClient?.connectHeaders?.Authorization).toBe('Bearer late-token');
     });
 
-    it('sends "Bearer " when no token exists in localStorage', () => {
-        capturedConfig!.beforeConnect?.();
-        expect(capturedClient!.connectHeaders?.Authorization).toBe('Bearer ');
+    it('sends an empty bearer token when no JWT exists', () => {
+        capturedConfig?.beforeConnect?.();
+        expect(capturedClient?.connectHeaders?.Authorization).toBe('Bearer ');
     });
 });
 
 describe('WebSocketService — connect()', () => {
-    it('calls activate() when not yet connected', () => {
+    it('activates the STOMP client when inactive', () => {
         wsService.connect();
         expect(mockActivate).toHaveBeenCalledOnce();
     });
 
-    it('fires the onConnected callback after activation', () => {
-        const cb = vi.fn();
-        wsService.connect(cb);
-        expect(cb).toHaveBeenCalledOnce();
-    });
-
-    it('does NOT call activate() again if already active, but still fires callback', () => {
+    it('does not activate again when already active', () => {
         _active = true;
-        const cb = vi.fn();
-        wsService.connect(cb);
+        wsService.connect();
         expect(mockActivate).not.toHaveBeenCalled();
-        expect(cb).toHaveBeenCalledOnce();
     });
 });
 
 describe('WebSocketService — disconnect()', () => {
-    it('calls deactivate() when active', () => {
+    it('deactivates the STOMP client when active', () => {
         _active = true;
         wsService.disconnect();
         expect(mockDeactivate).toHaveBeenCalledOnce();
     });
 
-    it('does NOT call deactivate() when already inactive', () => {
-        _active = false;
+    it('does not deactivate when already inactive', () => {
         wsService.disconnect();
         expect(mockDeactivate).not.toHaveBeenCalled();
     });
 });
 
-describe('WebSocketService — subscribeToRoom()', () => {
-    it('subscribes to the correct STOMP topic', () => {
-        wsService.connect();
-        wsService.subscribeToRoom('42', vi.fn());
-        expect(mockSubscribe).toHaveBeenCalledWith('/topic/rooms/42', expect.any(Function));
-    });
-
-    it('parses incoming JSON and passes the object to the callback', () => {
+describe('WebSocketService — subscriptions', () => {
+    it('subscribes to the correct room topic and parses JSON messages', () => {
         const cb = vi.fn();
-        wsService.connect();
-        wsService.subscribeToRoom('1', cb);
 
-        const handler = mockSubscribe.mock.calls[0][1] as (m: { body: string }) => void;
-        handler({ body: JSON.stringify({ from: 'e2', to: 'e4', promotion: 'q' }) });
+        wsService.subscribeToRoom('42', cb);
 
-        expect(cb).toHaveBeenCalledWith({ from: 'e2', to: 'e4', promotion: 'q' });
-    });
-});
+        expect(mockSubscribe).toHaveBeenCalledWith('/topic/rooms/42', expect.any(Function));
 
-describe('WebSocketService — sendMove()', () => {
-    it('publishes to the correct STOMP destination when connected', () => {
-        _connected = true;
-        const move = { from: 'e2', to: 'e4', promotion: 'q' };
-        wsService.sendMove('99', move);
-        expect(mockPublish).toHaveBeenCalledWith({
-            destination: '/app/game/99/move',
-            body: JSON.stringify(move),
-        });
+        const firstSubscribeCall = mockSubscribe.mock.calls[0] as unknown as [string, (message: { body: string }) => void];
+        const handler = firstSubscribeCall[1];
+        handler({ body: JSON.stringify({ type: 'ROOM_JOINED', payload: { id: 42 } }) });
+
+        expect(cb).toHaveBeenCalledWith({ type: 'ROOM_JOINED', payload: { id: 42 } });
     });
 
-    it('does NOT publish when not connected', () => {
-        _connected = false;
-        wsService.sendMove('99', { from: 'e2', to: 'e4' });
-        expect(mockPublish).not.toHaveBeenCalled();
+    it('unsubscribes a single registered topic', () => {
+        wsService.subscribeToRoom('42', vi.fn());
+
+        wsService.unsubscribe('room-42');
+
+        expect(mockSubscription.unsubscribe).toHaveBeenCalledOnce();
+    });
+
+    it('re-subscribes active topics after a reconnect', () => {
+        wsService.subscribeToGame('7', vi.fn());
+
+        expect(mockSubscribe).toHaveBeenCalledTimes(1);
+
+        capturedClient?.onWebSocketClose?.();
+        capturedConfig?.onConnect?.({});
+
+        expect(mockSubscribe).toHaveBeenCalledTimes(2);
+        expect(mockSubscribe).toHaveBeenNthCalledWith(2, '/topic/games/7', expect.any(Function));
     });
 });

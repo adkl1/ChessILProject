@@ -44,13 +44,12 @@ export default function LobbyPage() {
         fetchRooms();
 
         // Connect to WebSocket and subscribe to global room updates
-        wsService.connect(() => {
-            wsService.subscribeToRooms((payload) => {
-                // The server broadcasts room updates — refresh the list
-                // Payload could be a single room update or a signal to refetch
-                console.log('[WS] Room update received:', payload);
-                fetchRooms();
-            });
+        wsService.connect();
+        wsService.subscribeToRooms((payload) => {
+            // The server broadcasts room updates — refresh the list
+            // Payload could be a single room update or a signal to refetch
+            console.log('[WS] Room update received:', payload);
+            fetchRooms();
         });
 
         return () => {

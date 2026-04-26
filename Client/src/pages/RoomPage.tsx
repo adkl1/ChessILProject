@@ -23,6 +23,11 @@ interface GameStartResponse {
     status: string;
 }
 
+interface SocketEvent<T> {
+    type: string;
+    payload: T;
+}
+
 export default function RoomPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -59,12 +64,12 @@ export default function RoomPage() {
     useEffect(() => {
         if (!id) return;
 
-        wsService.connect(() => {
-            wsService.subscribeToRoom(id, (payload) => {
-                const update = payload as RoomResponse;
-                console.log('[WS] Room update:', update);
-                setRoom(update);
-            });
+        wsService.connect();
+        wsService.subscribeToRoom(id, (payload) => {
+            const update = (payload as SocketEvent<RoomResponse>).payload;
+            if (!update) return;
+            console.log('[WS] Room update:', update);
+            setRoom(update);
         });
 
         return () => {
