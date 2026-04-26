@@ -1,0 +1,33 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import AuthPage from './pages/AuthPage';
+import MenuPage from './pages/MenuPage';
+import LobbyPage from './pages/LobbyPage';
+import RoomPage from './pages/RoomPage';
+import GamePage from './pages/GamePage';
+import ProfilePage from './pages/ProfilePage';
+import LeaderboardPage from './pages/LeaderboardPage';
+import FriendsPage from './pages/FriendsPage';
+import ProtectedRoute from './components/ProtectedRoute';
+
+function App() {
+    return (
+        <Router>
+            <Routes>
+                {/* Public */}
+                <Route path="/" element={<Navigate to="/login" />} />
+                <Route path="/login" element={<AuthPage />} />
+
+                {/* Protected — requires a valid JWT */}
+                <Route path="/menu" element={<ProtectedRoute><MenuPage /></ProtectedRoute>} />
+                <Route path="/lobby" element={<ProtectedRoute><LobbyPage /></ProtectedRoute>} />
+                <Route path="/room/:id" element={<ProtectedRoute><RoomPage /></ProtectedRoute>} />
+                <Route path="/game/:id" element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
+                <Route path="/friends" element={<ProtectedRoute><FriendsPage /></ProtectedRoute>} />
+            </Routes>
+        </Router>
+    );
+}
+
+export default App;
