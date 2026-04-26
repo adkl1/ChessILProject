@@ -45,37 +45,65 @@ export default function RoomPage() {
     const myColor = location.state?.myColor ?? 'w';
 
     useEffect(() => {
+        let active = true;
+
         const fetchRooms = async () => {
             try {
                 const { data } = await api.get<RoomResponse[]>('/rooms');
                 const found = data.find(r => r.id === Number(id));
+                if (!active) return;
+
                 if (found) {
                     setRoom(found);
+                    return;
                 }
+
+                setRoom(null);
+                navigate('/lobby', { replace: true });
             } catch (err) {
                 console.error(err);
             } finally {
-                setLoading(false);
+                if (active) {
+                    setLoading(false);
+                }
             }
         };
 
         fetchRooms();
-    }, [id]);
+
+        return () => {
+            active = false;
+        };
+    }, [id, navigate]);
 
     useEffect(() => {
         if (!id) return;
 
+        let active = true;
+        const exitRoom = () => {
+            if (!active) return;
+            setRoom(null);
+            setLoading(false);
+            navigate('/lobby', { replace: true });
+        };
+
         wsService.connect();
         wsService.subscribeToRoom(id, (payload) => {
-            const update = (payload as SocketEvent<RoomResponse>).payload;
-            if (!update) return;
-            setRoom(update);
+            const event = payload as SocketEvent<RoomResponse | null>;
+            if (event.type === 'ROOM_DELETED' || event.type === 'ROOM_CLOSED') {
+                exitRoom();
+                return;
+            }
+
+            if (!event.payload) return;
+            setRoom(event.payload);
         });
 
         return () => {
+            active = false;
             wsService.unsubscribe(`room-${id}`);
         };
-    }, [id]);
+    }, [id, navigate]);
 
     useEffect(() => {
         if (room?.status === 'IN_GAME' && room?.gameId) {
